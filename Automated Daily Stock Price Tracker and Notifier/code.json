@@ -1,0 +1,110 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": [
+          {
+            "mode": "everyDay",
+            "hour": 9,
+            "minute": 0
+          }
+        ]
+      },
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "https://www.alphavantage.co/query",
+        "queryParametersUi": {
+          "parameter": [
+            { "name": "function", "value": "TIME_SERIES_INTRADAY" },
+            { "name": "symbol", "value": "AAPL" },
+            { "name": "interval", "value": "5min" },
+            { "name": "apikey", "value": "YOUR_API_KEY" }
+          ]
+        },
+        "responseFormat": "json"
+      },
+      "name": "Get Stock Price",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = $json['Time Series (5min)'];\nconst latestTime = Object.keys(data)[0];\nconst price = parseFloat(data[latestTime]['1. open']);\n\nreturn [{ json: { price, time: latestTime } }];"
+      },
+      "name": "Extract Price",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.price }}",
+              "operation": "larger",
+              "value2": 190
+            }
+          ]
+        }
+      },
+      "name": "Check Threshold",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "TELEGRAM_CHAT_ID",
+        "text": "🚨 AAPL stock price is above threshold: {{$json.price}} USD",
+        "telegramApi": {
+          "apiToken": "BOT_TOKEN"
+        }
+      },
+      "name": "Send Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "sheetId": "YOUR_SHEET_ID",
+        "range": "Sheet1!A:C",
+        "valueInputMode": "RAW",
+        "options": {},
+        "dataMode": "raw",
+        "rawData": true,
+        "dataProperty": "data"
+      },
+      "name": "Log to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [1000, 400]
+    }
+  ],
+  "connections": {
+    "Cron": {
+      "main": [[ { "node": "Get Stock Price", "type": "main", "index": 0 } ]]
+    },
+    "Get Stock Price": {
+      "main": [[ { "node": "Extract Price", "type": "main", "index": 0 } ]]
+    },
+    "Extract Price": {
+      "main": [[ { "node": "Check Threshold", "type": "main", "index": 0 } ]]
+    },
+    "Check Threshold": {
+      "main": [
+        [ { "node": "Send Telegram", "type": "main", "index": 0 } ],
+        [ { "node": "Log to Sheets", "type": "main", "index": 0 } ]
+      ]
+    }
+  }
+}
